@@ -1,0 +1,1326 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blackout in Regia</title>
+<style>
+/* Concept: la regia di uno studio streaming di notte. Un solo colore forte, il rosso della spia "LIVE" (il cronometro). Tutto il resto resta quieto. */
+:root{
+  color-scheme: dark;
+  --ink:#0a0e17; --panel:#111827; --line:#222e47; --term:#080c14;
+  --text:#dce6ff; --dim:#8794b1;
+  --tally:#ff3b4e; --cyan:#58d3ff; --ok:#5be58c; --amber:#ffcf6b; --violet:#c9a0ff;
+  --display:"Bahnschrift","DIN Alternate","Avenir Next Condensed","Arial Narrow",system-ui,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --fs:15px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--text);font:16px/1.5 var(--display);-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+.app{display:flex;flex-direction:column;gap:10px;height:100%;max-width:1040px;margin:0 auto;padding:12px 16px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.brand{font-weight:700;font-size:20px;letter-spacing:.14em;text-transform:uppercase;line-height:1.1;min-width:0}
+.brand small{display:block;margin-top:2px;font-size:11px;font-weight:400;letter-spacing:.1em;color:var(--dim)}
+.timer{margin-left:auto;display:flex;align-items:center;gap:8px;padding:5px 14px;border-radius:999px;border:1px solid var(--tally);background:rgba(255,59,78,.08);font-weight:700;font-size:19px;letter-spacing:.06em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.timer .dot{width:10px;height:10px;border-radius:50%;background:var(--tally);animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,59,78,.65)}70%{box-shadow:0 0 0 8px rgba(255,59,78,0)}100%{box-shadow:0 0 0 0 rgba(255,59,78,0)}}
+@media (prefers-reduced-motion:reduce){.timer .dot{animation:none}}
+.timer.late{background:var(--tally);color:#fff}
+.timer.late .dot{background:#fff;animation:none}
+.tools{display:flex;gap:6px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:6px 12px;min-height:38px;cursor:pointer;font-family:var(--mono);font-size:13px}
+.btn:hover{border-color:var(--cyan)}
+.btn.primary{background:var(--tally);border-color:var(--tally);color:#fff;font-family:var(--display);font-weight:700;letter-spacing:.1em;font-size:17px;padding:11px 22px}
+.btn.armed{border-color:var(--tally);color:var(--tally)}
+
+.code{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.code .lbl{font-size:11px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin-right:4px}
+.slot{min-width:38px;text-align:center;padding:1px 9px;border-radius:6px;border:1px dashed var(--line);color:var(--dim);font:600 12px/1.7 var(--mono);letter-spacing:.06em}
+.slot.on{border:1px solid var(--ok);color:var(--ok);background:rgba(91,229,140,.08)}
+
+.goal{display:flex;gap:10px;align-items:baseline;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-size:15px}
+.goal b{font-size:11px;letter-spacing:.14em;color:var(--tally);white-space:nowrap}
+.goal span{min-width:0;overflow-wrap:anywhere}
+
+.term{flex:1;min-height:140px;overflow:auto;background:var(--term);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:var(--fs)/1.55 var(--mono);cursor:text}
+.ln{white-space:pre-wrap;overflow-wrap:anywhere;min-height:1.55em}
+.ln.dim{color:var(--dim)}
+.ln.ok{color:var(--ok)}
+.ln.info{color:var(--cyan)}
+.ln.warn{color:var(--amber)}
+.ln.err{color:#ff8a8a}
+.ln.title{color:var(--amber);font-weight:700}
+.ln.big{font-size:1.2em;font-weight:700;color:var(--tally)}
+.ln.frag{color:var(--amber);font-weight:700;margin-top:6px}
+.ln.phone{color:var(--cyan)}
+.ln.gap{margin-top:8px}
+.chip{display:inline-block;margin:1px 2px 1px 0;padding:0 6px;border:1px solid rgba(88,211,255,.4);border-radius:6px;background:rgba(88,211,255,.1);color:var(--cyan);cursor:pointer}
+.chip:hover{background:rgba(88,211,255,.25)}
+.chip.dir{color:var(--violet);border-color:rgba(201,160,255,.45);background:rgba(201,160,255,.1)}
+.chip.bin{color:var(--amber);border-color:rgba(255,207,107,.45);background:rgba(255,207,107,.1)}
+.hl{color:var(--amber);font-weight:700}
+.row{display:flex;align-items:center;gap:6px;margin-top:4px}
+.ps{color:var(--ok);white-space:nowrap}
+.inp{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--text);font:inherit;font-size:max(16px,var(--fs));caret-color:var(--ok);padding:4px 0}
+.quick{display:flex;flex-wrap:wrap;gap:8px}
+@media (max-width:540px){.ps .usr{display:none}.brand{font-size:17px}.timer{font-size:16px}}
+
+.overlay{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:16px;background:rgba(5,8,14,.92);overflow:auto}
+.overlay[hidden]{display:none}
+.card{width:100%;max-width:640px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px 22px}
+.card .kicker{margin:0 0 6px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.card h1{margin:0 0 12px;font-size:40px;line-height:1.05;letter-spacing:.06em;text-transform:uppercase;text-wrap:balance}
+.card p{margin:0 0 12px}
+.card ul{margin:0 0 18px;padding-left:20px}
+.card li{margin-bottom:4px}
+.card code{font-family:var(--mono);color:var(--cyan)}
+.card .small{margin:12px 0 0;font-size:13px;color:var(--dim)}
+.card b{color:var(--tally)}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="bar">
+    <div class="brand">Blackout in Regia<small>Escape room di cybersecurity</small></div>
+    <div class="timer" id="timer"><i class="dot"></i><span id="timerTxt">LIVE tra 15:00</span></div>
+    <div class="tools">
+      <button class="btn" id="fsDown" type="button" aria-label="Riduci il testo">A&minus;</button>
+      <button class="btn" id="fsUp" type="button" aria-label="Ingrandisci il testo">A+</button>
+      <button class="btn" id="restart" type="button">Ricomincia</button>
+    </div>
+  </header>
+  <section class="code" id="slots" aria-label="Parole del codice d'uscita"></section>
+  <div class="goal"><b>OBIETTIVO</b><span id="goalTxt"></span></div>
+  <main class="term" id="term">
+    <div id="out" role="log" aria-live="polite"></div>
+    <form class="row" id="form" autocomplete="off">
+      <span class="ps" id="ps"></span>
+      <input class="inp" id="inp" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="Scrivi un comando e premi Invio">
+    </form>
+  </main>
+  <nav class="quick" aria-label="Comandi rapidi">
+    <button class="btn" type="button" data-run="ls">ls</button>
+    <button class="btn" type="button" data-ins="cat ">cat &hellip;</button>
+    <button class="btn" type="button" data-ins="cd ">cd &hellip;</button>
+    <button class="btn" type="button" data-run="cd ..">cd ..</button>
+    <button class="btn" type="button" data-run="hint">hint</button>
+    <button class="btn" type="button" data-run="mappa">mappa</button>
+    <button class="btn" type="button" data-run="glossario">glossario</button>
+  </nav>
+</div>
+
+<div class="overlay" id="start">
+  <div class="card">
+    <p class="kicker">Escape room di cybersecurity &middot; 10-15 minuti &middot; 2-4 giocatori</p>
+    <h1>Blackout in Regia</h1>
+    <p>È la sera della live più importante di Zeta, lo streamer di ZetaLive. Mancano 15 minuti. Un hacker che si fa chiamare <b>OMBRA</b> ha preso il controllo della rete dello studio e ha chiuso la porta della regia con te dentro.</p>
+    <p>Se non esci in tempo, i video privati di Zeta finiranno online durante la diretta.</p>
+    <ul>
+      <li>Si gioca scrivendo comandi con la tastiera. I testi colorati si possono cliccare per scriverli da soli.</li>
+      <li>Non c'è game over: se vi bloccate scrivete <code>hint</code> (3 aiuti per ogni prova).</li>
+      <li>Nomi, password, siti e dati sono tutti inventati. Non si attacca niente di reale.</li>
+    </ul>
+    <button class="btn primary" id="go" type="button">INIZIA LA MISSIONE</button>
+    <p class="small">Il cronometro parte quando premi il pulsante.</p>
+  </div>
+</div>
+<noscript><p style="padding:16px">Serve JavaScript per giocare: apri questo file con un browser normale (Chrome, Edge, Firefox).</p></noscript>
+
+<script>
+'use strict';
+
+/* ================================================================
+   1. HASH: MD5 e SHA-256 scritti a mano (nessuna libreria)
+   ================================================================ */
+function md5(str){
+  const b = new TextEncoder().encode(str), n = b.length;
+  const len = (((n + 8) >> 6) + 1) * 16;
+  const m = new Array(len).fill(0);
+  for (let i = 0; i < n; i++) m[i >> 2] |= b[i] << ((i % 4) * 8);
+  m[n >> 2] |= 0x80 << ((n % 4) * 8);
+  m[len - 2] = (n * 8) >>> 0;
+  m[len - 1] = Math.floor(n * 8 / 4294967296);
+  const S = [7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21];
+  const K = Array.from({length: 64}, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296) >>> 0);
+  let a0 = 0x67452301, b0 = 0xefcdab89 | 0, c0 = 0x98badcfe | 0, d0 = 0x10325476;
+  for (let o = 0; o < len; o += 16) {
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let F, g;
+      if (i < 16) { F = (B & C) | (~B & D); g = i; }
+      else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+      else if (i < 48) { F = B ^ C ^ D; g = (3 * i + 5) % 16; }
+      else { F = C ^ (B | ~D); g = (7 * i) % 16; }
+      const t = D; D = C; C = B;
+      const s = (A + F + K[i] + m[o + g]) | 0;
+      B = (B + ((s << S[i]) | (s >>> (32 - S[i])))) | 0;
+      A = t;
+    }
+    a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
+  }
+  const hx = v => [0, 8, 16, 24].map(sh => ((v >>> sh) & 255).toString(16).padStart(2, '0')).join('');
+  return hx(a0) + hx(b0) + hx(c0) + hx(d0);
+}
+
+function sha256(str){
+  const b = new TextEncoder().encode(str), l = b.length;
+  if (!sha256.K) {
+    const pr = []; for (let c = 2; pr.length < 64; c++) if (pr.every(p => c % p)) pr.push(c);
+    const fr = x => Math.floor((x - Math.floor(x)) * 4294967296) >>> 0;
+    sha256.K = pr.map(p => fr(Math.cbrt(p)));
+    sha256.H = pr.slice(0, 8).map(p => fr(Math.sqrt(p)));
+  }
+  const K = sha256.K, tot = ((l + 9 + 63) >> 6) << 6;
+  const buf = new Uint8Array(tot); buf.set(b); buf[l] = 0x80;
+  const dv = new DataView(buf.buffer);
+  dv.setUint32(tot - 8, Math.floor(l * 8 / 4294967296)); dv.setUint32(tot - 4, (l * 8) >>> 0);
+  const ror = (x, n) => (x >>> n) | (x << (32 - n));
+  let H = sha256.H.slice(); const w = new Uint32Array(64);
+  for (let o = 0; o < tot; o += 64) {
+    for (let i = 0; i < 16; i++) w[i] = dv.getUint32(o + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = ror(w[i-15], 7) ^ ror(w[i-15], 18) ^ (w[i-15] >>> 3);
+      const s1 = ror(w[i-2], 17) ^ ror(w[i-2], 19) ^ (w[i-2] >>> 10);
+      w[i] = w[i-16] + s0 + w[i-7] + s1;
+    }
+    let [a, bb, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const S1 = ror(e, 6) ^ ror(e, 11) ^ ror(e, 25), ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+      const S0 = ror(a, 2) ^ ror(a, 13) ^ ror(a, 22), mj = (a & bb) ^ (a & c) ^ (bb & c);
+      const t2 = (S0 + mj) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = bb; bb = a; a = (t1 + t2) >>> 0;
+    }
+    H = [H[0]+a, H[1]+bb, H[2]+c, H[3]+d, H[4]+e, H[5]+f, H[6]+g, H[7]+h].map(x => x >>> 0);
+  }
+  return H.map(x => x.toString(16).padStart(8, '0')).join('');
+}
+
+/* ================================================================
+   2. DATI DEL GIOCO  (qui si modificano storia, indizi e soluzioni)
+   ================================================================ */
+const CFG = { secondi: 15 * 60 };
+const ORDER = [1, 10, 20, 30, 40, 50];
+const LEVEL = {
+  1:  { nome: 'Regia',               rete: '10.1.0.0/24',  tema: 'Tutorial' },
+  10: { nome: 'Ufficio manager',     rete: '10.10.0.0/24', tema: 'Phishing',                 parola: 'PENSA',     motto: 'pensa prima di cliccare' },
+  20: { nome: 'Postazione gaming',   rete: '10.20.0.0/24', tema: 'Password deboli',          parola: 'ALLUNGA',   motto: 'allunga la password' },
+  30: { nome: 'Pannello del canale', rete: '10.30.0.0/24', tema: 'Secondo fattore (MFA)',    parola: 'RADDOPPIA', motto: 'raddoppia la protezione' },
+  40: { nome: 'Archivio video',      rete: '10.40.0.0/24', tema: 'Ransomware e backup',      parola: 'COPIA',     motto: 'fai sempre una copia' },
+  50: { nome: 'Server di streaming', rete: '10.50.0.0/24', tema: 'Aggiornamenti e download', parola: 'AGGIORNA',  motto: 'aggiorna i programmi' }
+};
+const UTENTI = [
+  { u: 'zeta',  pw: 'zeta2026' },
+  { u: 'dario', pw: 'ciao123' },
+  { u: 'sara',  pw: 'tazza-nuvola-ponte-87' }
+];
+const PAROLE_COMUNI = ['123456','password','12345678','qwerty','abc123','111111','ciao','ciao123','ciaociao','amore','juventus','milan','inter','napoli','roma','fortnite','minecraft','fifa2026','password1','iloveyou','admin','admin123','benvenuto','estate2026','zeta2025','zeta2026','zeta2027','zetalive','dragon','football','master','login'];
+const FILE_VERO   = 'StreamStudio 2.2 | build 2210 | firmato StreamHub | falla "porta di servizio" CHIUSA';
+const FILE_PRO    = 'StreamStudio 2.2 | build 2210 | firmato StreamHub | falla "porta di servizio" CHIUSA | +modulo extra';
+const FILE_GRATIS = 'StreamStudio 2.2 CRACK | installer non ufficiale | include "attivatore"';
+const otpAt  = step => String(parseInt(sha256('zeta-app-' + step).slice(0, 8), 16) % 1000000).padStart(6, '0');
+const otpNow = () => Math.floor(Date.now() / 30000);
+
+function T(s){ return s.replace(/^\n/, '').replace(/\s+$/, ''); }
+const BIN = s => ({ __bin: s });
+
+function buildFS(){
+  const hashes = UTENTI.map(x => x.u + ':' + md5(x.pw)).join('\n');
+  const hVero = sha256(FILE_VERO);
+  const fs = {};
+
+  fs[1] = {
+    'missione.txt': T(`
+MISSIONE · BLACKOUT IN REGIA
+════════════════════════════
+LA SITUAZIONE
+Stasera Zeta fa la live più importante dell'anno: 100.000 iscritti al canale ZetaLive.
+Un hacker che si fa chiamare OMBRA è entrato nella rete dello studio. Ha bloccato la porta della regia con te dentro e ha lasciato scritto:
+    «Quando parte la live pubblico tutti i video privati di Zeta.»
+
+IL TEMPO
+La live parte tra 15 minuti: guarda il cronometro in alto.
+
+COSA DEVI FARE
+1. Segui le tracce di Ombra nella rete dello studio, una VLAN alla volta.
+2. In ogni VLAN c'è una FRAGILITÀ (un punto debole): trovala e chiudila.
+3. Ogni fragilità chiusa ti regala una PAROLA del codice d'uscita.
+4. Con le 5 parole apri la porta (la serratura è smart ed è collegata alla rete):
+   uscita PAROLA1 PAROLA2 PAROLA3 PAROLA4 PAROLA5
+
+IL TUO PERMESSO
+Zeta e il suo manager ti hanno dato il permesso scritto di entrare nei loro sistemi per proteggerli. Si chiama HACKER ETICO.
+Senza permesso, entrare in un sistema informatico è reato (art. 615-ter del Codice penale).
+
+LA PRIMA TRACCIA
+Il log dice che Ombra è partito dall'ufficio del manager: è la VLAN 10.`),
+    'comandi.txt': T(`
+I COMANDI PER MUOVERTI
+══════════════════════
+Si scrive il comando e poi si preme INVIO.
+
+ls            mostra i file e le cartelle di dove ti trovi
+cat NOME      legge un file                 esempio: cat missione.txt
+cd NOME       entra in una cartella         esempio: cd guida
+cd ..         torna indietro di una cartella
+pwd           ti dice dove sei
+
+AIUTI DEL GIOCO
+hint          un suggerimento per la prova in corso (ce ne sono 3)
+mappa         mostra le VLAN, i progressi e le parole del codice
+glossario     spiega le parole difficili         esempio: glossario hash
+help          elenca tutti i comandi
+
+TRUCCHI
+• Premi TAB per completare un nome (scrivi cat mis e poi TAB).
+• Freccia SU = ripete il comando di prima.
+• I testi colorati si possono cliccare: si scrivono da soli.`),
+    'guida': {
+      'vlan.txt': T(`
+COS'È UNA VLAN?
+═══════════════
+Immagina lo studio di Zeta come un palazzo. I cavi e gli switch sono gli stessi per tutti, ma la rete è divisa in "stanze virtuali" separate.
+Ogni stanza è una VLAN (Virtual LAN, cioè rete locale virtuale) e ha un numero: il VLAN ID.
+
+PERCHÉ SERVE?
+Per la sicurezza. Se un intruso entra in una VLAN, non vede subito i computer delle altre.
+
+COME SI USA QUI
+Per passare in un'altra VLAN scrivi:  vlan NUMERO   (esempio: vlan 10)
+Una VLAN si apre solo quando hai chiuso la fragilità della precedente.
+Il numero della prossima VLAN lo scopri risolvendo ogni prova.`)
+    }
+  };
+
+  fs[10] = {
+    'leggimi.txt': T(`
+FRAGILITÀ 1 di 5 · PHISHING
+═══════════════════════════
+Stamattina Sara, la manager di Zeta, ha ricevuto una mail. Pochi minuti dopo Ombra era dentro la rete.
+
+PAROLE DA CONOSCERE
+• PHISHING = una mail o un messaggio FALSO che finge di essere un servizio di fiducia per farti dare password e codici, oppure per farti scaricare un virus. L'esca è il messaggio.
+• DOMINIO = la parte dell'indirizzo dopo la @. In sara@zetalive.example il dominio è zetalive.example. Se non è quello ufficiale, il mittente è finto.
+• ALLEGATO = un file attaccato alla mail. Un .zip o un programma che non aspettavi può contenere un virus.
+
+COSA FARE
+1. Leggi le tre mail nella cartella posta (con ls, cd e cat).
+2. Controlla i domini ufficiali nella cartella appunti.
+3. Quando hai trovato la mail trappola scrivi:  segnala NOMEFILE`),
+    'log.txt': T(`
+LOG DEL PC DI SARA · giovedì
+08:11  Arrivata una mail da "Assistenza StreamHub"
+08:12  Aperto https://streamhub-verifica.example/login
+08:12  Inseriti email, password e codice di verifica
+08:13  Scaricato RipristinoCanale.zip e avviato il programma`),
+    'posta': {
+      'mail1.txt': T(`
+Da: Marco Riva <marco@zetalive.example>
+A: sara@zetalive.example
+Oggetto: Orari della live di venerdì
+
+Ciao Sara,
+ti confermo gli orari: prove alle 18:00, live alle 21:00.
+Porti tu il microfono di riserva?
+Grazie! Marco`),
+      'mail2.txt': T(`
+Da: Assistenza StreamHub <assistenza@streamhub-verifica.example>
+A: sara@zetalive.example
+Oggetto: URGENTE Conferma il tuo canale entro 10 minuti
+
+Gentile Sara,
+abbiamo rilevato un problema sul canale ZetaLive. Se non completi la verifica entro 10 minuti il canale verrà sospeso e perderete la live di stasera.
+Apri il collegamento "Accedi a StreamHub", inserisci email e password e comunica il codice di verifica che riceverai sul telefono.
+Per fare prima, scarica l'allegato RipristinoCanale.zip e avvia il programma contenuto. Non contattare nessuno: il servizio è automatico.
+Assistenza StreamHub
+
+Destinazione effettiva del collegamento: https://streamhub-verifica.example/login
+Allegato: RipristinoCanale.zip`),
+      'mail3.txt': T(`
+Da: StreamHub News <news@streamhub.example>
+A: sara@zetalive.example
+Oggetto: Novità di ottobre per i creator
+
+Ciao! Questo mese su StreamHub: nuove emoji per le chat e statistiche più chiare.
+Leggi tutto sul sito ufficiale, scrivendo tu l'indirizzo streamhub.example nel browser.
+Questa mail non ti chiede nessuna password.`)
+    },
+    'appunti': {
+      'indirizzi_ufficiali.txt': T(`
+INDIRIZZI UFFICIALI (per controllare i mittenti)
+  La piattaforma:   streamhub.example
+  Il team di Zeta:  zetalive.example
+Regola del team: nessuna piattaforma chiede MAI password o codici per mail.`)
+    }
+  };
+
+  fs[20] = {
+    'leggimi.txt': T(`
+FRAGILITÀ 2 di 5 · PASSWORD DEBOLI
+══════════════════════════════════
+Da questa postazione Ombra ha copiato il file con le "impronte" (HASH) delle password dello studio. Poi ha provato a indovinarle. Rifai il suo attacco, ma da difensore: così scopri quali password erano deboli.
+
+PAROLE DA CONOSCERE
+• HASH = l'impronta digitale di una password. I computer non salvano la password vera ma il suo hash, una sequenza di lettere e numeri. Dall'hash non si "torna indietro" con un calcolo.
+• PASSWORD CRACKING = provare tantissime password, calcolare l'hash di ognuna e vedere se è uguale a quello rubato. Se combacia, hai scoperto la password.
+• JOHN THE RIPPER ("john") = programma VERO usato dai tecnici per controllare se le password di un'azienda sono deboli (e usato anche dagli attaccanti). Qui trovi una versione semplificata.
+• LISTA DI PAROLE = elenco di password molto usate, come 123456 o ciao123.
+
+COSA FARE
+1. Entra nella cartella utenti:  [[cd utenti]]
+2. Guarda gli hash:  [[cat hash.txt]]
+3. Lancia l'attacco:  [[john hash.txt]]
+4. Rispondi alla domanda finale.`),
+    'nota_di_zeta.txt': T(`
+POST-IT DI ZETA (sul desktop)
+"Uso la stessa password per tutto, è più comodo! È il mio nome più l'anno, così non la scordo."`),
+    'utenti': {
+      'hash.txt': hashes,
+      'parole_comuni.txt': PAROLE_COMUNI.join('\n')
+    }
+  };
+
+  fs[30] = {
+    'leggimi.txt': T(`
+FRAGILITÀ 3 di 5 · UNA SOLA PROTEZIONE
+══════════════════════════════════════
+Questo è il pannello del canale: da qui si decide tutto (video, live, guadagni). Ombra è già dentro con una sessione aperta.
+Leggi sessioni.txt e account.txt per capire come ha fatto. Poi entra tu come proprietario e caccialo.
+
+PAROLE DA CONOSCERE
+• AUTENTICAZIONE A PIÙ FATTORI (MFA, o 2FA se sono due) = per entrare servono almeno due prove di tipo diverso:
+    – qualcosa che SAI (la password)
+    – qualcosa che HAI (il telefono con l'app dei codici)
+    – qualcosa che SEI (impronta del dito o volto)
+• CODICE MONOUSO (OTP) = codice di 6 cifre che cambia ogni 30 secondi. Anche se qualcuno scopre la tua password, senza il telefono non entra.
+
+COSA FARE
+1. Leggi account.txt e sessioni.txt.
+2. Scrivi [[telefono]] per vedere il codice (Zeta ti ha dato il permesso di usare il suo telefono).
+3. Scrivi [[login]] e inserisci utente, password e codice. Il codice dura 30 secondi: sii veloce!`),
+    'account.txt': T(`
+ACCOUNT DEL PANNELLO ZETALIVE
+utente   ruolo           protezione
+zeta     proprietario    password + codice sul telefono (MFA)
+sara     manager         password + codice sul telefono (MFA)
+dario    moderatore      solo password   <-- manca il secondo fattore!
+Solo il proprietario può chiudere le sessioni degli altri utenti.`),
+    'sessioni.txt': T(`
+REGISTRO DEGLI ACCESSI · giovedì
+08:13  sara   ACCESSO riuscito da 203.0.113.77 (indirizzo sconosciuto)
+              password + codice di Sara: glieli ha regalati lei, nella mail falsa
+08:25  zeta   TENTATIVO fallito da 203.0.113.77
+              la password era giusta ma mancava il codice: BLOCCATO dal secondo fattore
+08:26  dario  ACCESSO riuscito da 203.0.113.77
+              bastava la password: dario non ha il secondo fattore
+08:31  dario  avviato "esporta tutti i video privati"`)
+  };
+
+  fs[40] = {
+    'leggimi.txt': T(`
+FRAGILITÀ 4 di 5 · RANSOMWARE E BACKUP
+══════════════════════════════════════
+Ombra ha lanciato un RANSOMWARE nell'archivio: tutti i video di Zeta sono bloccati e hanno l'estensione .locked. Chiede un riscatto per sbloccarli. Pagare NON è una soluzione sicura: i file potrebbero restare bloccati.
+
+PAROLE DA CONOSCERE
+• RANSOMWARE = virus che CIFRA (chiude con un lucchetto digitale) i tuoi file e chiede soldi per darti la chiave.
+• BACKUP = copia di sicurezza dei file, da usare quando l'originale si rovina, si cancella o viene bloccato.
+• BACKUP PULITO = fatto PRIMA dell'attacco. Se ripristini una copia fatta dopo, riporti dentro anche il virus!
+• REGOLA 3-2-1 = tieni 3 copie dei dati, su 2 supporti diversi, di cui 1 fuori sede (per esempio nel cloud).
+
+COSA FARE
+1. Leggi registro_attacco.txt: a che ora è iniziato l'attacco?
+2. Guarda i backup nella cartella backup (ogni nome ha giorno e ora). Con cat vedi cosa contengono.
+3. Scegli l'ULTIMO backup pulito e scrivi:  ripristina NOMEFILE`),
+    'registro_attacco.txt': T(`
+REGISTRO ATTACCO · giovedì
+08:30  il ransomware inizia a cifrare i file in video_live/
+08:41  tutti i video di video_live/ sono ora .locked
+08:41  creato il file LEGGIMI_RISCATTO.txt`),
+    'video_live': {
+      'LEGGIMI_RISCATTO.txt': T(`
+I TUOI VIDEO SONO BLOCCATI.
+Se vuoi riaverli devi pagare il riscatto prima della live.
+                                   - OMBRA`),
+      'video_01.mp4.locked': '[file cifrato: illeggibile]',
+      'video_02.mp4.locked': '[file cifrato: illeggibile]',
+      'video_03.mp4.locked': '[file cifrato: illeggibile]'
+    },
+    'backup': {
+      'backup_lun_2300.tar': T(`
+BACKUP di lunedì ore 23:00
+Contenuto: 118 video   |   file .locked: 0
+Stato: SANO`),
+      'backup_mar_2300.tar': T(`
+BACKUP di martedì ore 23:00
+Contenuto: 119 video   |   file .locked: 0
+Stato: SANO`),
+      'backup_mer_2300.tar': T(`
+BACKUP di mercoledì ore 23:00
+Contenuto: 121 video   |   file .locked: 0
+Stato: SANO`),
+      'backup_gio_0900.tar': T(`
+BACKUP di giovedì ore 09:00
+Contenuto: 121 video   |   file .locked: 121
+Stato: ATTENZIONE, contiene file bloccati`),
+      'info_backup.txt': T(`
+DOVE VENGONO SALVATI I BACKUP
+• Disco esterno nello studio: ogni sera alle 23:00 e un controllo alle 09:00.
+• Nessuna copia fuori dallo studio (niente cloud).`)
+    }
+  };
+
+  fs[50] = {
+    'leggimi.txt': T(`
+FRAGILITÀ 5 di 5 · AGGIORNAMENTI E DOWNLOAD
+═══════════════════════════════════════════
+Il server che trasmette la live usa StreamStudio 2.1, un programma VECCHIO. Ombra sfrutta una sua falla per tenere chiusa la porta. La falla è già stata risolta nella versione 2.2, ma in cartella ci sono tre file che dicono di essere la 2.2... e solo uno è vero.
+
+PAROLE DA CONOSCERE
+• VULNERABILITÀ = un errore o un buco in un programma che un attaccante può sfruttare.
+• PATCH / AGGIORNAMENTO = una correzione che il produttore pubblica per chiudere la vulnerabilità. Aggiornare presto è una delle difese più efficaci.
+• FONTE UFFICIALE = il sito vero del produttore (qui: streamhub.example). Non scaricare da siti "gratis", da chat o da link ricevuti.
+• CHECKSUM / SHA-256 = l'impronta digitale di un FILE (come l'hash delle password). Se cambia anche un solo carattere, l'impronta cambia completamente. Il sito ufficiale pubblica quella del file vero: se la tua è uguale, il file è intatto.
+
+COSA FARE
+1. Leggi sito_ufficiale.txt: c'è l'impronta del file vero.
+2. Guarda da dove arrivano i file: cd download, poi cat provenienza.txt
+3. Calcola l'impronta di ogni file con sha256sum NOMEFILE e confrontala (bastano le prime 8 cifre, in giallo).
+4. Installa solo quello giusto:  installa NOMEFILE`),
+    'sito_ufficiale.txt': T(`
+streamhub.example/studio/download
+─────────────────────────────────
+StreamStudio 2.2 · Aggiornamento di sicurezza (consigliato a tutti)
+Chiude la falla "porta di servizio aperta" della versione 2.1.
+File:    StreamStudio_2.2_setup.exe
+SHA-256: {{${hVero.slice(0, 8)}}}${hVero.slice(8)}
+Attenzione: scarica solo da streamhub.example. Non esistono versioni "gratis", "PRO" o "crack".`),
+    'download': {
+      'provenienza.txt': T(`
+DA DOVE SONO ARRIVATI I FILE
+StreamStudio_2.2_setup.exe       <- scaricato da streamhub.example/studio/download
+StreamStudio_2.2_setup_PRO.exe   <- scaricato da streamhub-download.example (consigliato da un utente in chat)
+StreamStudio_2.2_gratis.exe      <- scaricato da scarica-gratis-giochi.example`),
+      'StreamStudio_2.2_setup.exe': BIN(FILE_VERO),
+      'StreamStudio_2.2_setup_PRO.exe': BIN(FILE_PRO),
+      'StreamStudio_2.2_gratis.exe': BIN(FILE_GRATIS)
+    }
+  };
+  return fs;
+}
+
+/* ---- Intro di ogni VLAN ---- */
+const INTRO = {
+  10: [['══ VLAN 10 · UFFICIO MANAGER (rete 10.10.0.0/24) ══', 'title'],
+       ['Sei nel PC di Sara, la manager di Zeta. Stamattina alle 08:12 ha aperto una mail... e poco dopo Ombra era dentro.', ''],
+       ['FRAGILITÀ 1 di 5 · PHISHING', 'warn gap'],
+       ['Obiettivo: trova la mail trappola e decidi cosa fare. Inizia con [[ls]] e poi [[cat leggimi.txt]]', '']],
+  20: [['══ VLAN 20 · POSTAZIONE GAMING (rete 10.20.0.0/24) ══', 'title'],
+       ['Dal PC di Sara il virus ha aperto un varco fino al computer da gaming di Zeta. Qui Ombra ha copiato un file con le password... e le ha indovinate in pochi secondi.', ''],
+       ['FRAGILITÀ 2 di 5 · PASSWORD DEBOLI', 'warn gap'],
+       ['Obiettivo: rifai l\'attacco con john e scopri quali password erano deboli. Inizia da [[cat leggimi.txt]]', '']],
+  30: [['══ VLAN 30 · PANNELLO DEL CANALE (rete 10.30.0.0/24) ══', 'title'],
+       ['Da qui si controlla tutto il canale: video, live, guadagni. Ombra è già dentro con una sessione aperta.', ''],
+       ['FRAGILITÀ 3 di 5 · UNA SOLA PROTEZIONE', 'warn gap'],
+       ['Obiettivo: entra come proprietario e caccia Ombra. Ti serve anche il telefono di Zeta. Inizia da [[cat leggimi.txt]]', '']],
+  40: [['══ VLAN 40 · ARCHIVIO VIDEO (rete 10.40.0.0/24) ══', 'title'],
+       ['L\'archivio dei video di Zeta è stato colpito da un ransomware: i file hanno l\'estensione .locked e c\'è un messaggio di riscatto.', ''],
+       ['FRAGILITÀ 4 di 5 · RANSOMWARE E BACKUP', 'warn gap'],
+       ['Obiettivo: recupera i video dal backup giusto. Inizia da [[cat leggimi.txt]]', '']],
+  50: [['══ VLAN 50 · SERVER DI STREAMING (rete 10.50.0.0/24) ══', 'title'],
+       ['Ultima tappa: il server che manda in onda la live e comanda anche la serratura smart della porta. Ombra la tiene chiusa sfruttando un programma vecchio.', ''],
+       ['FRAGILITÀ 5 di 5 · AGGIORNAMENTI E DOWNLOAD', 'warn gap'],
+       ['Obiettivo: installa l\'aggiornamento VERO e chiudi la falla. Inizia da [[cat leggimi.txt]]', '']]
+};
+
+/* ---- Messaggio di successo di ogni prova ---- */
+const SUCCESS = {
+  10: () => [
+    ['✔ ESATTO!', 'ok'],
+    ['PERCHÉ: un canale diverso dalla mail (il sito scritto da te, il telefono dell\'assistenza, il manager di persona) non lo controlla chi ti ha scritto. Cliccare, scaricare o rispondere ti manda proprio da lui.', ''],
+    ['NELLA VITA REALE: a streamer e gamer arrivano finti avvisi di "canale sospeso", finti sponsor e finti premi. Se c\'è fretta, o chiedono password e codici, quasi sempre è phishing. Se hai già cliccato: cambia subito la password e avvisa un adulto o il referente informatico.', ''],
+    ['I LIMITI: i filtri antispam bloccano molte mail false ma non tutte: l\'ultima difesa sei tu.', 'dim']],
+  20: () => [
+    ['✔ ESATTO!', 'ok'],
+    ['PERCHÉ: ogni carattere in più moltiplica i tentativi necessari. Quattro parole casuali sono facili da ricordare e molto difficili da indovinare. I trucchetti (un 3 al posto della e, un ! alla fine) sono prevedibili e john li prova.', ''],
+    ['REGOLE D\'ORO: password LUNGA (almeno 12-16 caratteri), DIVERSA per ogni sito e, meglio ancora, un gestore di password che le ricorda per te.', ''],
+    ['NELLA VITA REALE: quando un sito subisce un furto di dati gli hash finiscono online e chiunque può provare a craccarli. Se usi la stessa password ovunque, una fuga ti mette a rischio su tutti i siti.', ''],
+    ['I LIMITI: qui l\'hash è MD5, vecchio e velocissimo da attaccare. I siti seri usano sistemi lenti e con "salt" (bcrypt, Argon2). Ma una password debole resta debole comunque.', 'dim'],
+    ['Ricorda: la password di zeta per il pannello del canale è  zeta2026  (ti servirà tra poco).', 'info']],
+  30: () => [
+    ['✔ ACCESSO RIUSCITO come zeta (proprietario). Le sessioni sospette sono chiuse: Ombra è stato cacciato dal pannello.', 'ok'],
+    ['PERCHÉ HA FUNZIONATO: avevi i DUE fattori, la password (qualcosa che sai) e il telefono (qualcosa che hai). Per questo il secondo fattore ferma chi ha soltanto la password: lo dice anche sessioni.txt, dove il tentativo su zeta è stato bloccato.', ''],
+    ['NELLA VITA REALE: l\'MFA ferma la maggior parte degli accessi con password rubate. Ombra è entrato lo stesso su sara perché lei gli ha DATO il codice nella mail falsa, e su dario perché non aveva il secondo fattore. Il codice non si comunica mai a nessuno, nemmeno a chi dice di essere l\'assistenza.', ''],
+    ['I LIMITI: l\'MFA non è magica, se ti fai ingannare e dai il codice serve a poco. App o chiave di sicurezza sono meglio degli SMS, ma qualsiasi MFA è meglio di niente. Da fare subito: attivarla anche su dario.', 'dim']],
+  40: () => [
+    ['✔ ARCHIVIO RIPRISTINATO dal backup di mercoledì 23:00: 121 video sono tornati sani. Il backup infetto è stato isolato.', 'ok'],
+    ['PERCHÉ È GIUSTO: è l\'ultimo backup fatto PRIMA dell\'inizio dell\'attacco (08:30 di giovedì). Ha più dati possibile e nessun virus. Quello delle 09:00 era stato fatto dopo e conteneva i file bloccati.', ''],
+    ['NELLA VITA REALE: i ransomware colpiscono scuole, ospedali e aziende. Chi ha un backup pulito e già provato non ha bisogno di pagare nessun riscatto.', ''],
+    ['REGOLA 3-2-1: qui c\'è solo il disco esterno dello studio. Servono 3 copie, su 2 supporti diversi, di cui 1 fuori sede (cloud) o scollegata dal PC, così un attacco non le raggiunge tutte.', ''],
+    ['I LIMITI: i backup vanno anche PROVATI ogni tanto. E se il virus era dentro già da giorni, anche i backup vecchi potrebbero essere infetti.', 'dim']],
+  50: () => [
+    ['✔ INSTALLATO: StreamStudio 2.2. La falla è chiusa e il blocco di Ombra sulla porta è caduto.', 'ok'],
+    ['PERCHÉ È GIUSTO: il file arriva dal sito ufficiale (streamhub.example) e la sua impronta SHA-256 è identica a quella pubblicata, quindi nessuno l\'ha modificato.', ''],
+    ['I DUE FALSI: _PRO.exe veniva da un dominio SIMILE (streamhub-download.example) e _gratis.exe da un sito sconosciuto. Avevano un\'impronta diversa: nota come basta una piccola differenza per cambiarla tutta.', ''],
+    ['NELLA VITA REALE: molti attacchi usano falle già note e già corrette, basta non aver aggiornato. E crack, mod e "versioni gratis" di giochi e programmi sono tra i modi più usati per far installare virus ai ragazzi.', ''],
+    ['I LIMITI: l\'impronta prova che il file non è stato modificato solo se la prendi da una fonte ufficiale. Un antivirus aggiornato aiuta come ulteriore difesa.', 'dim']]
+};
+
+/* ---- Suggerimenti graduati (3 per ogni fase) ---- */
+const HINTS = {
+  'tut':       ['Scrivi i comandi indicati nella riga OBIETTIVO in alto. Puoi anche cliccare sul testo colorato per scriverlo da solo.',
+                'Tutti i comandi sono spiegati in comandi.txt: scrivi cat comandi.txt',
+                'Nell\'ordine: ls, poi cat missione.txt, poi cd guida, poi cat vlan.txt, poi vlan 10'],
+  '10:find':   ['Guarda il mittente di ogni mail: la parte dopo la @ si chiama dominio. Confrontala con quella ufficiale nella cartella appunti.',
+                'Una sola mail ha il dominio sbagliato, mette fretta (10 minuti) e ha un allegato .zip. Controlla anche log.txt.',
+                'È mail2.txt. Scrivi: segnala mail2.txt'],
+  '10:choose': ['Il controllo deve avvenire senza passare dal link né dalla mail.',
+                'Aprire il link o rispondere significa fidarsi di chi ha scritto la mail falsa.',
+                'La risposta giusta è la 2.'],
+  '20:crack':  ['Gli hash sono nella cartella utenti: entra con cd utenti e leggi hash.txt.',
+                'Dentro utenti scrivi john hash.txt e aspetta qualche secondo.',
+                'Comandi: cd utenti  e poi  john hash.txt'],
+  '20:choose': ['Pensa a quale password è più difficile da indovinare per un programma che prova tantissime combinazioni.',
+                'Più è lunga e casuale, meglio è. I trucchetti (un 3 al posto della e, un ! alla fine) sono prevedibili.',
+                'La risposta giusta è la 3.'],
+  '30:login':  ['Il pannello vuole due prove: qualcosa che SAI (una password trovata con john) e qualcosa che HAI (il telefono).',
+                'Scrivi telefono per vedere il codice, poi login. Utente: zeta.',
+                'Utente zeta, password zeta2026, poi il codice del telefono. Se scade scrivi di nuovo telefono e usa quello nuovo.'],
+  '40:restore':['Leggi registro_attacco.txt: a che ora è iniziato l\'attacco?',
+                'Serve l\'ultimo backup fatto PRIMA di quell\'ora. Guarda giorno e ora nei nomi della cartella backup, e usa cat per vedere il contenuto.',
+                'È backup_mer_2300.tar. Scrivi: ripristina backup_mer_2300.tar (dentro la cartella backup)'],
+  '50:verify': ['Leggi sito_ufficiale.txt: c\'è l\'impronta SHA-256 del file vero. Poi guarda provenienza.txt nella cartella download.',
+                'Dentro download scrivi sha256sum NOMEFILE per ogni file e confronta le prime 8 cifre (in giallo) con quelle del sito ufficiale.',
+                'Il file giusto arriva da streamhub.example: StreamStudio_2.2_setup.exe. Scrivi: sha256sum StreamStudio_2.2_setup.exe'],
+  '50:install':['Hai calcolato le impronte: quale combacia con quella del sito ufficiale?',
+                'È quella del file che arriva da streamhub.example (senza PRO e senza gratis nel nome).',
+                'Scrivi: installa StreamStudio_2.2_setup.exe'],
+  'final':     ['Hai tutte le parole! Scrivi uscita seguita dalle parole, nell\'ordine in cui le hai trovate. Con mappa le rivedi.',
+                'Le parole sono 5, una per ogni fragilità chiusa.',
+                'Scrivi: uscita PENSA ALLUNGA RADDOPPIA COPIA AGGIORNA']
+};
+
+/* ---- Glossario ---- */
+const GLOSS = {
+  vlan: 'VLAN (Virtual LAN) = rete locale virtuale. È una "stanza" separata dentro la rete: i cavi sono gli stessi, ma i dispositivi di una VLAN non vedono quelli delle altre. Ha un numero, il VLAN ID (da 1 a 4094). Serve alla sicurezza: se un intruso entra in una VLAN non arriva subito alle altre.',
+  terminale: 'Terminale = finestra in cui dai ordini al computer scrivendo comandi (come ls, cd, cat) invece di cliccare.',
+  hash: 'Hash = impronta digitale di un dato. Dalla stessa password esce sempre lo stesso hash, ma dall\'hash non si ricava la password con un calcolo: si può solo provare a indovinarla.',
+  cracking: 'Password cracking = provare moltissime password, calcolare l\'hash di ognuna e confrontarlo con quello rubato. Se combacia, la password è scoperta.',
+  john: 'John the Ripper ("john") = programma vero per controllare quanto sono forti le password. Lo usano i tecnici per difendere e, purtroppo, anche gli attaccanti.',
+  wordlist: 'Lista di parole (wordlist) = elenco di password molto comuni (123456, ciao123...) usato per i tentativi.',
+  passphrase: 'Passphrase = password fatta di più parole casuali, lunga e facile da ricordare (esempio: pizza-razzo-fiume-giallo).',
+  phishing: 'Phishing = messaggio falso che finge di arrivare da un servizio di fiducia per rubarti password e codici o farti scaricare un virus.',
+  dominio: 'Dominio = la parte dell\'indirizzo dopo la @ (mail) o dopo https:// (sito). Se è diverso da quello ufficiale, anche di una sola parola, è finto.',
+  allegato: 'Allegato = file attaccato a una mail. Un .zip o un programma inatteso può contenere un virus.',
+  mfa: 'MFA (autenticazione a più fattori; 2FA se sono due) = per entrare servono due prove diverse: qualcosa che SAI (password), qualcosa che HAI (telefono) o qualcosa che SEI (impronta). Il codice monouso (OTP) cambia ogni 30 secondi.',
+  ransomware: 'Ransomware = virus che CIFRA (chiude con un lucchetto digitale) i file e chiede un riscatto per sbloccarli.',
+  backup: 'Backup = copia di sicurezza dei file. Regola 3-2-1: 3 copie, su 2 supporti diversi, di cui 1 fuori sede. Il backup giusto è quello PULITO, fatto prima dell\'attacco.',
+  patch: 'Vulnerabilità = buco in un programma sfruttabile da un attaccante. Patch (aggiornamento) = correzione del produttore che chiude quel buco.',
+  checksum: 'Checksum / SHA-256 = impronta digitale di un FILE. Se il file cambia anche di un solo carattere, l\'impronta cambia tutta. Serve a controllare che un download sia intatto.',
+  'hacker etico': 'Hacker etico = esperto di sicurezza che prova a entrare nei sistemi CON IL PERMESSO del proprietario, per trovare i punti deboli prima dei criminali. Senza permesso è reato (art. 615-ter c.p.).',
+  log: 'Log = registro automatico di ciò che succede in un computer o in una rete (accessi, download, errori). Aiuta a capire cosa è successo.'
+};
+const GLOSS_ALIAS = { 'vlan id': 'vlan', 'password cracking': 'cracking', 'craccare': 'cracking', 'dizionario': 'wordlist', 'lista': 'wordlist', 'otp': 'mfa', '2fa': 'mfa', 'secondo fattore': 'mfa', 'cifrare': 'ransomware', '3-2-1': 'backup', 'vulnerabilità': 'patch', 'vulnerabilita': 'patch', 'aggiornamento': 'patch', 'vulnerabilità/patch': 'patch', 'sha256': 'checksum', 'sha-256': 'checksum', 'impronta': 'hash', 'hacker': 'hacker etico' };
+
+/* ================================================================
+   3. MOTORE DEL GIOCO
+   ================================================================ */
+const $ = s => document.querySelector(s);
+const out = $('#out'), term = $('#term'), inp = $('#inp'), form = $('#form'), psEl = $('#ps');
+const AUTORI = /autori/i.test(location.hash);
+let state, FS, busy = false, tickId = null;
+
+function newState(){
+  return {
+    vlan: 1, cwd: [], solved: { 1: true }, visited: { 1: true },
+    stage: { 10: 'find', 20: 'crack', 30: 'login', 40: 'restore', 50: 'verify' },
+    words: [], hintsUsed: 0, hintIdx: {}, started: false, startAt: 0, endAt: 0, done: false, overtime: false,
+    mode: 'normal', choice: null, login: null, flags: {}, cracked: {}, checked: {}, hist: [], hi: 0
+  };
+}
+
+/* ---------- stampa ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function render(el, text){
+  const re = /\[\[(.+?)\]\]|\{\{(.+?)\}\}/g; let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) el.appendChild(document.createTextNode(text.slice(last, m.index)));
+    if (m[1] !== undefined) {
+      const c = document.createElement('span');
+      c.className = 'chip'; c.textContent = m[1]; c.dataset.ins = m[1]; c.tabIndex = 0; c.setAttribute('role', 'button');
+      el.appendChild(c);
+    } else {
+      const h = document.createElement('span'); h.className = 'hl'; h.textContent = m[2]; el.appendChild(h);
+    }
+    last = re.lastIndex;
+  }
+  if (last < text.length) el.appendChild(document.createTextNode(text.slice(last)));
+}
+function line(text, cls){
+  const d = document.createElement('div');
+  d.className = 'ln' + (cls ? ' ' + cls : '');
+  render(d, text == null ? '' : String(text));
+  out.appendChild(d);
+  return d;
+}
+function settle(){
+  while (out.childNodes.length > 1500) out.removeChild(out.firstChild);
+  term.scrollTop = term.scrollHeight;
+}
+function P(text, cls){ line(text, cls); settle(); }
+function PM(arr){ for (const x of arr) line(x[0], x[1]); settle(); }
+function buildPrompt(el){
+  el.textContent = '';
+  if (state.mode === 'choice') { el.textContent = 'scelta (1-' + state.choice.n + ') > '; return; }
+  if (state.mode === 'login') { el.textContent = ['utente: ', 'password: ', 'codice (6 cifre): '][state.login.step]; return; }
+  const u = document.createElement('span'); u.className = 'usr'; u.textContent = 'tecnico@';
+  el.appendChild(u);
+  el.appendChild(document.createTextNode('vlan' + state.vlan + ':~' + (state.cwd.length ? '/' + state.cwd.join('/') : '') + '$'));
+}
+function echo(text, masked){
+  const d = document.createElement('div'); d.className = 'ln';
+  const s = document.createElement('span'); s.className = 'ps'; buildPrompt(s);
+  d.appendChild(s); d.appendChild(document.createTextNode((state.mode === 'normal' ? ' ' : '') + (masked ? '•'.repeat(text.length) : text)));
+  out.appendChild(d); settle();
+}
+const fmt = sec => { sec = Math.max(0, Math.floor(sec)); return String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); };
+
+/* ---------- file system ---------- */
+const isDir = n => n !== null && typeof n === 'object' && n.__bin === undefined;
+const isBin = n => n !== null && typeof n === 'object' && n.__bin !== undefined;
+function findKey(dir, name){
+  if (name in dir) return name;
+  const low = name.toLowerCase();
+  return Object.keys(dir).find(k => k.toLowerCase() === low);
+}
+function fuzzyKey(dir, name){
+  const low = name.toLowerCase();
+  const c = Object.keys(dir).filter(k => { const kl = k.toLowerCase(); return kl.startsWith(low) || kl.replace(/\.[^.]+$/, '') === low; });
+  return c.length === 1 ? c[0] : null;
+}
+function resolve(path, opts){
+  opts = opts || {};
+  const abs = path.startsWith('/') || path.startsWith('~');
+  const parts = abs ? [] : state.cwd.slice();
+  for (const seg of path.replace(/^[~\/]+/, '').split('/')) {
+    if (!seg || seg === '.') continue;
+    if (seg === '..') { parts.pop(); continue; }
+    parts.push(seg);
+  }
+  let node = FS[state.vlan]; const real = [];
+  for (const p of parts) {
+    if (!isDir(node)) return { err: 'notdir', name: p };
+    let k = findKey(node, p);
+    if (!k && opts.fuzzy) k = fuzzyKey(node, p);
+    if (!k) return { err: 'nofile', name: p, dir: node };
+    real.push(k); node = node[k];
+  }
+  return { node, parts: real };
+}
+const cwdNode = () => resolve('.').node;
+function lev(a, b){
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function errMsg(cmd, arg, r){
+  if (r.err === 'notdir') { P(cmd + ': "' + arg + '" non è una cartella.', 'err'); return; }
+  P(cmd + ': "' + arg + '" non esiste qui. Guarda i nomi con [[ls]].', 'err');
+  if (r.dir) {
+    const near = Object.keys(r.dir).filter(k => lev(k.toLowerCase(), r.name.toLowerCase()) <= 2);
+    if (near.length) P('Forse intendevi: ' + near.map(k => '[[' + k + ']]').join(' '), 'dim');
+  }
+}
+
+/* ---------- comandi base ---------- */
+function cmdLs(args){
+  const paths = args.filter(a => !a.startsWith('-'));
+  const r = paths.length ? resolve(paths[0], { fuzzy: true }) : { node: cwdNode() };
+  if (r.err) return errMsg('ls', paths[0], r);
+  if (!isDir(r.node)) { P(paths[0]); return; }
+  const names = Object.keys(r.node);
+  if (!names.length) { P('(cartella vuota)', 'dim'); return; }
+  const d = document.createElement('div'); d.className = 'ln';
+  const base = paths.length ? paths[0].replace(/\/+$/, '') + '/' : '';
+  for (const k of names) {
+    const v = r.node[k], c = document.createElement('span');
+    c.className = 'chip ' + (isDir(v) ? 'dir' : isBin(v) ? 'bin' : '');
+    c.textContent = isDir(v) ? k + '/' : k;
+    c.dataset.ins = (isDir(v) ? 'cd ' : isBin(v) ? 'sha256sum ' : 'cat ') + base + k;
+    c.tabIndex = 0; c.setAttribute('role', 'button');
+    d.appendChild(c); d.appendChild(document.createTextNode(' '));
+  }
+  out.appendChild(d); settle();
+  if (state.vlan === 1) state.flags.ls = true;
+}
+function showText(t){
+  const L = t.split('\n');
+  if (L.length > 1 && /^[═─]{3,}$/.test(L[1])) {
+    line(L[0], 'title'); line(L[1], 'dim');
+    if (L.length > 2) line(L.slice(2).join('\n'));
+  } else line(t);
+  settle();
+}
+function cmdCat(args){
+  const files = args.filter(a => !a.startsWith('-'));
+  if (!files.length) return P('Uso: cat NOMEFILE      (esempio: cat missione.txt)', 'warn');
+  for (const f of files) {
+    const r = resolve(f, { fuzzy: true });
+    if (r.err) { errMsg('cat', f, r); continue; }
+    if (isDir(r.node)) { P('cat: "' + f + '" è una cartella. Per entrare scrivi [[cd ' + f + ']], per vedere cosa contiene [[ls ' + f + ']].', 'warn'); continue; }
+    const name = r.parts[r.parts.length - 1];
+    if (name.toLowerCase() !== f.split('/').pop().toLowerCase()) P('(ho letto ' + name + ')', 'dim');
+    if (isBin(r.node)) { P(name + ' è un programma (file binario): con cat non si legge. Per controllarlo usa [[sha256sum ' + name + ']]', 'warn'); continue; }
+    showText(r.node);
+    if (state.vlan === 1) { if (name === 'missione.txt') state.flags.mission = true; if (name === 'vlan.txt') state.flags.vlanTxt = true; }
+  }
+}
+function cmdCd(args){
+  const a = args[0];
+  if (!a || a === '~' || a === '/') { state.cwd = []; return; }
+  const r = resolve(a, { fuzzy: true });
+  if (r.err) return errMsg('cd', a, r);
+  if (!isDir(r.node)) return P('cd: "' + a + '" è un file, non una cartella. Per leggerlo usa [[cat ' + a + ']].', 'warn');
+  if (a === '..' && !state.cwd.length) P('Sei già nella cartella principale di questa VLAN.', 'dim');
+  state.cwd = r.parts;
+  if (state.vlan === 1 && state.cwd.join('/') === 'guida') state.flags.guida = true;
+}
+function cmdPwd(){ P('/vlan' + state.vlan + (state.cwd.length ? '/' + state.cwd.join('/') : '')); }
+
+/* ---------- aiuti ---------- */
+function toolHelp(){
+  const t = { 10: '[[segnala mail2.txt]]  segnala una mail di phishing', 20: '[[john hash.txt]]  prova a indovinare le password da un file di hash',
+              30: '[[telefono]] mostra il codice · [[login]] entra nel pannello', 40: 'ripristina NOMEFILE  ripristina un backup',
+              50: 'sha256sum NOMEFILE  calcola l\'impronta · installa NOMEFILE  installa un programma' };
+  return t[state.vlan];
+}
+function cmdHelp(){
+  let s = 'COMANDI BASE\n  ls            mostra file e cartelle\n  cat FILE      legge un file\n  cd CARTELLA   entra in una cartella (cd .. torna indietro)\n  pwd           dove sono?\n  clear         pulisce lo schermo\n' +
+          'AIUTI DEL GIOCO\n  hint          un suggerimento (3 per ogni prova)\n  mappa         VLAN, progressi e parole del codice\n  glossario     spiega le parole difficili\n  vlan NUMERO   cambia VLAN (se è sbloccata)';
+  if (toolHelp()) s += '\nSTRUMENTO DI QUESTA VLAN\n  ' + toolHelp();
+  if (state.words.length === 5) s += '\nPORTA\n  uscita PAROLE';
+  P(s);
+}
+function frontier(){ return ORDER.find(n => n !== 1 && !state.solved[n]); }
+function hintKey(){
+  if (!state.visited[10]) return 'tut';
+  const f = frontier();
+  if (!f) return 'final';
+  if (!state.visited[f]) return 'go:' + f;
+  if (state.vlan !== f) return 'back:' + f;
+  return f + ':' + state.stage[f];
+}
+function cmdHint(){
+  const key = hintKey();
+  if (key.startsWith('go:') || key.startsWith('back:')) {
+    const f = key.split(':')[1];
+    P('Per ora la prova da risolvere è nella VLAN ' + f + ' (' + LEVEL[f].nome + '). Scrivi [[vlan ' + f + ']].', 'info');
+    return;
+  }
+  const list = HINTS[key];
+  let i = state.hintIdx[key] || 0;
+  if (state.overtime) i = list.length;
+  if (i < list.length) { state.hintIdx[key] = i + 1; state.hintsUsed++; P('💡 Suggerimento ' + (i + 1) + '/' + list.length + ': ' + list[i], 'info'); }
+  else P('💡 Hai già usato i ' + list.length + ' suggerimenti di questa prova: ' + list[list.length - 1], 'info');
+}
+function cmdMappa(){
+  const rows = ['MAPPA · rete dello studio di ZetaLive'];
+  for (const n of ORDER) {
+    const L = LEVEL[n], here = n === state.vlan;
+    const icon = state.solved[n] && n !== 1 ? '✔' : (n === 1 ? '·' : (state.visited[n] ? '►' : '✖'));
+    const info = n === 1 ? 'tutorial' : L.tema + (state.solved[n] ? '  → ' + L.parola : (state.visited[n] ? '  (da risolvere)' : '  (chiusa)'));
+    rows.push('  ' + icon + ' VLAN ' + String(n).padEnd(3) + ' ' + L.nome.padEnd(20) + info + (here ? '   <- sei qui' : ''));
+  }
+  const slots = [10, 20, 30, 40, 50].map(n => state.solved[n] ? LEVEL[n].parola : '_____');
+  rows.push('');
+  rows.push('Codice d\'uscita: ' + slots.join('  '));
+  rows.push('Fragilità chiuse: ' + state.words.length + '/5     Suggerimenti usati: ' + state.hintsUsed);
+  P(rows.join('\n'));
+}
+function cmdGlossario(args){
+  if (!args.length) {
+    P('GLOSSARIO · scrivi glossario PAROLA (esempio: glossario hash)\nParole: ' + Object.keys(GLOSS).join(', '));
+    return;
+  }
+  let q = args.join(' ').toLowerCase();
+  q = GLOSS_ALIAS[q] || q;
+  let k = Object.keys(GLOSS).find(x => x === q) || Object.keys(GLOSS).find(x => x.includes(q) || q.includes(x));
+  if (!k) { P('Non conosco "' + q + '". Scrivi [[glossario]] per l\'elenco.', 'warn'); return; }
+  P(GLOSS[k], 'info');
+}
+
+/* ---------- VLAN ---------- */
+const canEnter = n => { const i = ORDER.indexOf(n); return i === 0 || !!state.solved[ORDER[i - 1]] || !!state.visited[n]; };
+async function enterVlan(n){
+  P('▶ Connessione alla VLAN ' + n + ' (' + LEVEL[n].rete + ')...', 'dim');
+  await sleep(350);
+  state.vlan = n; state.cwd = [];
+  if (!state.visited[n]) { state.visited[n] = true; PM(INTRO[n]); }
+  else P('Sei tornato nella VLAN ' + n + ' · ' + LEVEL[n].nome + (state.solved[n] ? ' (prova già risolta)' : ''), 'info');
+}
+async function cmdVlan(args){
+  if (!args.length) { P('VLAN attuale: ' + state.vlan + ' · ' + LEVEL[state.vlan].nome + '\nPer cambiare scrivi vlan e il numero (esempio: [[vlan 10]]). Con [[mappa]] vedi quali sono aperte.', 'info'); return; }
+  const n = parseInt(args[0], 10);
+  if (!ORDER.includes(n)) { P('La VLAN ' + args[0] + ' non esiste in questa rete. Scrivi [[mappa]] per vedere quelle dello studio.', 'err'); return; }
+  if (!canEnter(n)) {
+    P('✖ Accesso negato alla VLAN ' + n + ': il varco è chiuso.', 'err');
+    P('Prima devi chiudere la fragilità della VLAN ' + ORDER[ORDER.indexOf(n) - 1] + '. Scrivi [[mappa]] per vedere a che punto sei.', 'warn');
+    return;
+  }
+  if (n === state.vlan) { P('Sei già nella VLAN ' + n + '.', 'dim'); return; }
+  await enterVlan(n);
+}
+
+/* ---------- risoluzione di una prova ---------- */
+const NEXT = { 10: 'vlan 20', 20: 'vlan 30', 30: 'vlan 40', 40: 'vlan 50' };
+function solve(n){
+  state.solved[n] = true; state.stage[n] = 'done';
+  state.mode = 'normal'; state.choice = null; state.login = null;
+  const w = LEVEL[n].parola; state.words.push(w);
+  PM(SUCCESS[n]());
+  P('★ FRAMMENTO ' + state.words.length + '/5 del codice d\'uscita:  ' + w + '   (' + LEVEL[n].motto + ')', 'frag');
+  if (NEXT[n]) P('► Ombra è passato alla tappa successiva. Scrivi [[' + NEXT[n] + ']]', 'info');
+  else P('★★★ Hai tutte e 5 le parole! Apri la porta:  [[uscita ' + [10, 20, 30, 40, 50].map(k => LEVEL[k].parola).join(' ') + ']]', 'frag');
+}
+
+/* ---------- VLAN 10: phishing ---------- */
+function needVlan(n, cmd){
+  if (state.vlan === n) return false;
+  P(cmd + ': questo strumento serve nella VLAN ' + n + ' (' + LEVEL[n].nome + ').', 'warn');
+  return true;
+}
+function askChoice(id, n, lines){
+  state.mode = 'choice'; state.choice = { id, n };
+  PM(lines.map(l => [l, '']));
+}
+function cmdSegnala(args){
+  if (needVlan(10, 'segnala')) return;
+  if (state.stage[10] === 'done') return P('Hai già segnalato la mail trappola. Vai avanti: [[vlan 20]]', 'dim');
+  if (!args.length) return P('Uso: segnala NOMEFILE      (esempio: segnala mail1.txt)', 'warn');
+  const r = resolve(args[0], { fuzzy: true });
+  if (r.err) return errMsg('segnala', args[0], r);
+  if (!isDir(r.node) && r.parts[0] === 'posta') {
+    const name = r.parts[r.parts.length - 1];
+    if (name === 'mail1.txt') return P('✖ No: mail1.txt arriva da marco@zetalive.example, il dominio ufficiale del team. Non mette fretta e non chiede dati segreti: è una mail normale. Controlla le altre.', 'warn');
+    if (name === 'mail3.txt') return P('✖ No: news@streamhub.example è il dominio ufficiale della piattaforma e la mail non chiede nessuna password. Controlla le altre.', 'warn');
+    if (name === 'mail2.txt') {
+      state.stage[10] = 'choose';
+      PM([['✔ BRAVO! mail2.txt è il phishing. Ecco le 5 spie che l\'hanno tradita:', 'ok'],
+          ['  1. MITTENTE FALSO: il dominio è streamhub-verifica.example, non streamhub.example.', ''],
+          ['  2. FRETTA: «entro 10 minuti» ti fa agire senza pensare.', ''],
+          ['  3. CHIEDE DATI SEGRETI: password e codice di verifica non si danno mai per mail.', ''],
+          ['  4. ALLEGATO PERICOLOSO: RipristinoCanale.zip contiene un programma da avviare.', ''],
+          ['  5. COLLEGAMENTO TRUCCATO e «non contattare nessuno»: ti isolano per non farti controllare.', ''],
+          ['', '']]);
+      askChoice('phish', 3, ['Ora una domanda. Se questa mail arrivasse a TE, qual è la PRIMA cosa giusta da fare?',
+        '  1) Aprire il collegamento per vedere se la pagina sembra vera.',
+        '  2) Non cliccare e non scaricare: controllare su un altro canale (scrivere tu l\'indirizzo ufficiale o chiamare l\'assistenza) e segnalare la mail.',
+        '  3) Rispondere alla mail per chiedere se è davvero loro.',
+        'Scrivi 1, 2 o 3 e premi INVIO.']);
+      return;
+    }
+  }
+  P('segnala serve per le mail nella cartella posta: scegli uno dei file mail.', 'warn');
+}
+function answerPhish(k){
+  if (k === 1) return P('✖ No: già solo aprendo il link potresti finire su una pagina che copia quella vera, o far partire un download. Il controllo va fatto SENZA passare dalla mail. Riprova.', 'warn');
+  if (k === 3) return P('✖ No: risponderesti proprio all\'attaccante, che ti direbbe di sì. Serve un canale diverso dalla mail. Riprova.', 'warn');
+  solve(10);
+}
+
+/* ---------- VLAN 20: john ---------- */
+async function cmdJohn(args){
+  if (needVlan(20, 'john')) return;
+  let wl = null, show = false, file = null;
+  for (const a of args) {
+    if (a.startsWith('--wordlist=')) wl = a.slice(11);
+    else if (a === '--show') show = true;
+    else if (a.startsWith('-')) continue;
+    else file = a;
+  }
+  if (!file) return P('Uso: john FILE_HASH      (esempio: john hash.txt)\nSe non sai dove sono gli hash: scrivi [[ls]] e guarda nella cartella utenti.', 'warn');
+  const r = resolve(file, { fuzzy: true });
+  if (r.err) { errMsg('john', file, r); if (!state.cwd.length) P('Gli hash sono nella cartella utenti: [[cd utenti]]', 'dim'); return; }
+  if (isDir(r.node) || isBin(r.node)) return P('john: "' + file + '" non è un file di hash.', 'err');
+  const rows = r.node.split('\n').map(s => s.trim()).filter(Boolean).map(s => s.split(':'));
+  if (!rows.length || !rows.every(x => x.length === 2 && /^[0-9a-f]{32}$/i.test(x[1]))) {
+    return P('No password hashes loaded (il file non contiene hash nel formato utente:hash).', 'err');
+  }
+  if (show) {
+    const got = rows.filter(x => state.cracked[x[0]]);
+    P(got.map(x => x[0] + ':' + state.cracked[x[0]]).join('\n') + (got.length ? '\n\n' : '') + got.length + ' password hashes cracked, ' + (rows.length - got.length) + ' left');
+    return;
+  }
+  let words = PAROLE_COMUNI, wlName = 'parole_comuni.txt';
+  if (wl) {
+    const w = resolve(wl, { fuzzy: true });
+    if (w.err || !w.node || typeof w.node !== 'string') return P('john: lista di parole "' + wl + '" non trovata.', 'err');
+    words = w.node.split('\n').map(s => s.trim()).filter(Boolean); wlName = w.parts[w.parts.length - 1];
+  }
+  const left = rows.map(x => ({ u: x[0], h: x[1].toLowerCase() }));
+  const found = [];
+  const test = (pw) => { const i = left.findIndex(x => md5(pw) === x.h); if (i >= 0) { const x = left.splice(i, 1)[0]; found.push([x.u, pw]); state.cracked[x.u] = pw; return x.u; } return null; };
+  const pad = (a, b) => String(a).padEnd(16) + '(' + b + ')';
+  P('Using default input encoding: UTF-8\nLoaded ' + rows.length + ' password hashes with no different salts (Raw-MD5 [MD5 128/128 SSE2 4x3])\nPress \'q\' or Ctrl-C to abort, almost any other key for status', 'dim');
+  await sleep(500);
+  if (!wl) {
+    P('Proceeding with single, rules:Single', 'dim');
+    P('[john prova prima il nome utente con numeri e anni: gli utenti scelgono password prevedibili]', 'info');
+    await sleep(500);
+    for (const x of rows) {
+      const cand = [x[0], x[0] + '1', x[0] + '12', x[0] + '123', x[0] + '1234'];
+      for (let y = 2000; y <= 2035; y++) cand.push(x[0] + y);
+      for (const c of cand) { const u = test(c); if (u) { P(pad(c, u), 'ok'); await sleep(400); break; } }
+    }
+  }
+  P('Proceeding with wordlist:' + wlName + ', rules:Wordlist', 'dim');
+  P('[poi prova una lista di password molto usate]', 'info');
+  await sleep(500);
+  for (const pw of words) { const u = test(pw); if (u) { P(pad(pw, u), 'ok'); await sleep(400); } }
+  P('Proceeding with incremental:ASCII', 'dim');
+  await sleep(700);
+  P('[prova tutte le combinazioni possibili: per le password lunghe servirebbero anni, quindi fermiamo il programma]', 'info');
+  P('Session aborted\n' + found.length + 'g 0:00:00:03 DONE\nUse the "--show" option to display all of the cracked passwords reliably', 'dim');
+  await sleep(300);
+  const sum = ['RISULTATO DELL\'ATTACCO: ' + found.length + ' password su ' + rows.length + ' trovate in pochi secondi'];
+  for (const x of rows) {
+    const pw = state.cracked[x[0]];
+    sum.push('  ' + x[0].padEnd(6) + (pw ? '→ ' + pw.padEnd(12) + (x[0] === 'zeta' ? 'nome + anno: troppo prevedibile' : 'è tra le password più usate') : '→ non trovata   lunga e casuale: john non ce la fa'));
+  }
+  P(sum.join('\n'), 'warn gap');
+  if (state.stage[20] === 'crack' && state.cracked.zeta && state.cracked.dario) {
+    state.stage[20] = 'choose';
+    askChoice('pw', 3, ['', 'Ora una domanda. Zeta deve scegliere una NUOVA password per il canale. Qual è la più sicura?',
+      '  1) zeta2027',
+      '  2) Z3ta!2026',
+      '  3) pizza-razzo-fiume-giallo',
+      'Scrivi 1, 2 o 3 e premi INVIO.']);
+  }
+}
+function answerPw(k){
+  if (k === 1) return P('✖ No: è sempre il nome più un anno, e john lo trova subito (come ha fatto con zeta2026). Riprova.', 'warn');
+  if (k === 2) return P('✖ No: maiuscole, un 3 al posto della e e un punto esclamativo sono trucchi che i programmi provano per primi. Riprova.', 'warn');
+  solve(20);
+}
+
+/* ---------- VLAN 30: telefono + login ---------- */
+function showPhone(){
+  const left = 30 - Math.floor((Date.now() % 30000) / 1000);
+  const c = otpAt(otpNow()), code = c.slice(0, 3) + ' ' + c.slice(3);
+  const w = 30, row = s => '│ ' + s.padEnd(w - 2) + ' │';
+  P(['┌' + '─'.repeat(w) + '┐', row('TELEFONO DI ZETA'), row('App: StreamHub Verifica'), row(''), row('Codice:  ' + code), row('Scade tra ' + left + ' secondi'), '└' + '─'.repeat(w) + '┘'].join('\n'), 'phone');
+}
+function cmdTelefono(){
+  if (needVlan(30, 'telefono')) return;
+  showPhone();
+  P('Il codice cambia ogni 30 secondi. Quando sei pronto scrivi [[login]].', 'dim');
+}
+function cmdLogin(){
+  if (needVlan(30, 'login')) return;
+  if (state.stage[30] === 'done') return P('Hai già ripreso il controllo del pannello. Vai avanti: [[vlan 40]]', 'dim');
+  state.mode = 'login'; state.login = { step: 0, user: '' };
+  P('Pannello ZetaLive · accesso protetto. Scrivi annulla per uscire.', 'info');
+}
+function endLogin(){ state.mode = 'normal'; state.login = null; }
+function handleLogin(line){
+  const L = state.login, t = line.trim();
+  if (t.toLowerCase() === 'annulla') { endLogin(); P('Accesso annullato.', 'dim'); return; }
+  if (t.toLowerCase() === 'hint') { cmdHint(); return; }
+  if (L.step === 0) {
+    if (!t) { P('Scrivi il nome utente (esempio: zeta) oppure annulla.', 'warn'); return; }
+    L.user = t.toLowerCase(); L.step = 1; return;
+  }
+  if (L.step === 1) {
+    const u = UTENTI.find(x => x.u === L.user);
+    if (!u) { P('✖ Utente "' + L.user + '" sconosciuto. Gli account sono elencati in account.txt.', 'err'); endLogin(); return; }
+    if (line !== u.pw) {
+      P('✖ Password errata.', 'err');
+      P(L.user === 'sara' ? 'La password di sara john non è riuscito a trovarla: prova con un altro account.' : 'Controlla il risultato di john nella VLAN 20.', 'dim');
+      endLogin(); return;
+    }
+    if (L.user === 'dario') {
+      P('Password giusta. Accesso come dario (moderatore): NON è stato chiesto nessun codice, perché dario non ha il secondo fattore!', 'warn');
+      P('Ma un moderatore non può chiudere le sessioni degli altri: serve il proprietario (zeta). Proprio così è entrato Ombra: bastava la password.', 'info');
+      endLogin(); return;
+    }
+    L.step = 2; P('Password giusta. Ora il secondo fattore: scrivi il codice a 6 cifre dell\'app. Se non lo vedi, scrivi telefono.', 'info'); return;
+  }
+  if (t.toLowerCase() === 'telefono') { showPhone(); return; }
+  const code = t.replace(/\s+/g, '');
+  if (code !== otpAt(otpNow()) && code !== otpAt(otpNow() - 1)) {
+    P('✖ Codice errato o scaduto. Il codice cambia ogni 30 secondi: scrivi telefono per vedere quello nuovo e riprova.', 'err'); return;
+  }
+  solve(30);
+}
+
+/* ---------- VLAN 40: backup ---------- */
+function cmdRipristina(args){
+  if (needVlan(40, 'ripristina')) return;
+  if (state.stage[40] === 'done') return P('Hai già ripristinato l\'archivio. Vai avanti: [[vlan 50]]', 'dim');
+  if (!args.length) return P('Uso: ripristina NOMEFILE      (esempio: ripristina backup_lun_2300.tar)\nI backup sono nella cartella backup.', 'warn');
+  const bk = FS[40].backup, name = args[0].split('/').pop();
+  const k = findKey(bk, name) || fuzzyKey(bk, name);
+  if (!k || !k.startsWith('backup_')) return P('ripristina: "' + args[0] + '" non è un backup. Guarda i nomi con [[ls backup]].', 'err');
+  if (k === 'backup_gio_0900.tar') return P('✖ STOP! Questo backup è delle 09:00 di giovedì, fatto DOPO l\'attacco (08:30): contiene file .locked. Ripristinarlo rimetterebbe il ransomware nell\'archivio!', 'err');
+  if (k === 'backup_lun_2300.tar' || k === 'backup_mar_2300.tar') return P('Funzionerebbe, ma è troppo vecchio: perderesti i video fatti dopo. Scegli l\'ULTIMO backup pulito, cioè l\'ultimo fatto prima delle 08:30 di giovedì.', 'warn');
+  solve(40);
+}
+
+/* ---------- VLAN 50: sha256sum + installa ---------- */
+function cmdSha(args){
+  const files = args.filter(a => !a.startsWith('-'));
+  if (!files.length) return P('Uso: sha256sum NOMEFILE      (esempio: sha256sum StreamStudio_2.2_setup.exe)', 'warn');
+  for (const f of files) {
+    const r = resolve(f, { fuzzy: true });
+    if (r.err) { errMsg('sha256sum', f, r); continue; }
+    if (isDir(r.node)) { P('sha256sum: ' + f + ': è una cartella', 'err'); continue; }
+    const name = r.parts[r.parts.length - 1], h = sha256(isBin(r.node) ? r.node.__bin : r.node);
+    P('{{' + h.slice(0, 8) + '}}' + h.slice(8) + '  ' + name);
+    if (state.vlan === 50) {
+      state.checked[name] = true;
+      if (state.stage[50] === 'verify') state.stage[50] = 'install';
+    }
+  }
+}
+function cmdInstalla(args){
+  if (needVlan(50, 'installa')) return;
+  if (state.stage[50] === 'done') return P('StreamStudio 2.2 è già installato.', 'dim');
+  if (!args.length) return P('Uso: installa NOMEFILE      (esempio: installa StreamStudio_2.2_setup.exe)', 'warn');
+  const dl = FS[50].download, name = args[0].split('/').pop();
+  const k = findKey(dl, name) || fuzzyKey(dl, name);
+  if (!k || !isBin(dl[k])) return P('installa: "' + args[0] + '" non è un programma da installare. Guarda i file nella cartella download.', 'err');
+  if (!state.checked[k]) return P('Aspetta! Prima di installare un programma scaricato controlla la sua impronta: [[sha256sum ' + k + ']] e confrontala con quella del sito ufficiale.', 'warn');
+  if (sha256(dl[k].__bin) !== sha256(FILE_VERO)) {
+    return P('✖ ANTIVIRUS: l\'impronta di ' + k + ' è DIVERSA da quella ufficiale. Il file è stato modificato o non è quello vero: installazione bloccata. Controlla anche da dove arriva (provenienza.txt).', 'err');
+  }
+  solve(50);
+}
+
+/* ---------- uscita ---------- */
+function cmdUscita(args){
+  const all = [10, 20, 30, 40, 50].map(k => LEVEL[k].parola);
+  if (state.words.length < 5) return P('La porta resta chiusa: hai ' + state.words.length + ' parole su 5. Chiudi tutte le fragilità (scrivi [[mappa]] per vedere a che punto sei).', 'warn');
+  const given = args.join(' ').toUpperCase().replace(/[^A-Z ]/g, ' ').split(/\s+/).filter(Boolean);
+  if (!given.length) return P('Uso: uscita PAROLA1 PAROLA2 PAROLA3 PAROLA4 PAROLA5      (le parole sono in mappa)', 'warn');
+  if (given.join(' ') !== all.join(' ')) {
+    const same = given.length === 5 && [...given].sort().join() === [...all].sort().join();
+    return P(same ? '✖ Le parole ci sono tutte ma l\'ordine è sbagliato: usa quello in cui le hai trovate (guarda [[mappa]]).' : '✖ Codice errato. Ti servono le 5 parole, una per ogni fragilità chiusa (guarda [[mappa]]).', 'err');
+  }
+  finish();
+}
+async function finish(){
+  state.done = true; state.endAt = Date.now(); busy = true;
+  P('Codice accettato...', 'dim'); await sleep(700);
+  P('*CLACK*  La serratura smart si sblocca. La porta della regia si apre.', 'big'); await sleep(900);
+  P('Sullo schermo compare un ultimo messaggio:', 'dim gap');
+  P('«Complimenti. Sono Ombra... cioè il team di sicurezza che il manager di Zeta ha incaricato di mettere alla prova lo studio prima della live. Era una simulazione autorizzata, e hai trovato tutte e 5 le fragilità. Il canale è al sicuro: ci vediamo in diretta!»', 'info');
+  await sleep(900);
+  const sec = Math.round((state.endAt - state.startAt) / 1000);
+  P('LE 5 REGOLE D\'ORO DELLA SICUREZZA\n  PENSA prima di cliccare (phishing)\n  ALLUNGA le password (e una diversa per ogni sito)\n  RADDOPPIA la protezione con la verifica a due fattori\n  COPIA i tuoi dati (backup 3-2-1)\n  AGGIORNA i programmi e scarica solo da fonti ufficiali', 'ok gap');
+  P('Ricorda: entrare in un sistema senza permesso è reato (art. 615-ter c.p.). Qui lo hai fatto da hacker etico, con il permesso del proprietario.', 'dim');
+  const rep = 'REPORT DEL COLLAUDO (copialo nella Scheda 2)\n  Gioco: Blackout in Regia\n  Tempo impiegato: ' + fmt(sec) + (sec <= CFG.secondi ? '   (dentro i 15 minuti)' : '   (oltre i 15 minuti)') +
+              '\n  Prove completate: 5 su 5\n  Suggerimenti usati: ' + state.hintsUsed;
+  P(rep, 'warn gap');
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = 'Copia il report';
+  b.onclick = () => copyText(rep, b);
+  const d = document.createElement('div'); d.className = 'ln gap'; d.appendChild(b); out.appendChild(d);
+  P('Dopo la partita scrivete al gruppo autore un feedback: quale prova è stata più difficile e dove vi siete bloccati.', 'dim gap');
+  busy = false; refreshUI();
+}
+function copyText(text, btn){
+  const ok = () => { btn.textContent = 'Copiato!'; setTimeout(() => btn.textContent = 'Copia il report', 2000); };
+  const fallback = () => {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok(); } catch (e) { btn.textContent = 'Seleziona e copia a mano'; }
+    document.body.removeChild(ta);
+  };
+  try { navigator.clipboard.writeText(text).then(ok, fallback); } catch (e) { fallback(); }
+}
+
+/* ---------- comandi per gli autori (apri il file con #autori in fondo all'indirizzo) ---------- */
+function cmdSoluzioni(){
+  P('SOLUZIONI (modalità autori)\n 1 Phishing   : segnala mail2.txt, risposta 2           -> PENSA     -> vlan 20\n 2 Password   : cd utenti, john hash.txt, risposta 3     -> ALLUNGA   -> vlan 30\n 3 MFA        : telefono, login: zeta / zeta2026 / codice  -> RADDOPPIA -> vlan 40\n 4 Backup     : ripristina backup_mer_2300.tar           -> COPIA     -> vlan 50\n 5 Update     : sha256sum sui 3 file, installa StreamStudio_2.2_setup.exe -> AGGIORNA\n Uscita       : uscita PENSA ALLUNGA RADDOPPIA COPIA AGGIORNA\n Comando salta: risolve la prova in corso', 'warn');
+}
+async function cmdSalta(){
+  const f = frontier();
+  if (!f) return P('Tutte le prove sono già risolte.', 'dim');
+  if (!state.visited[f]) { await enterVlan(f); }
+  solve(f);
+}
+
+/* ---------- smistamento dei comandi ---------- */
+const CMD = {
+  ls: cmdLs, cat: cmdCat, cd: cmdCd, pwd: cmdPwd, help: cmdHelp, hint: cmdHint, mappa: cmdMappa, glossario: cmdGlossario,
+  vlan: cmdVlan, segnala: cmdSegnala, john: cmdJohn, telefono: cmdTelefono, login: cmdLogin, ripristina: cmdRipristina,
+  sha256sum: cmdSha, installa: cmdInstalla, uscita: cmdUscita,
+  clear: () => { out.textContent = ''; },
+  whoami: () => P('tecnico (hacker etico, con il permesso di Zeta)'),
+  echo: a => P(a.join(' ')),
+  exit: () => P('Per uscire devi aprire la porta: serve il codice. Scrivi [[mappa]] per vedere a che punto sei.', 'warn')
+};
+if (AUTORI) { CMD.soluzioni = cmdSoluzioni; CMD.salta = cmdSalta; }
+const COMANDI = Object.keys(CMD);
+const MODE_OK = new Set(['ls', 'cat', 'cd', 'pwd', 'clear', 'help', 'hint', 'mappa', 'glossario', 'whoami']);
+const FAKE = new Set(['rm', 'sudo', 'mv', 'cp', 'mkdir', 'touch', 'nano', 'vim', 'ssh', 'nmap', 'ping', 'curl', 'wget', 'chmod', 'man', 'su', 'kill']);
+
+async function handleCommand(text){
+  const t = text.trim();
+  if (!t) return;
+  state.hist.push(t); state.hi = state.hist.length;
+  const parts = t.split(/\s+/), cmd = parts[0].toLowerCase(), args = parts.slice(1);
+  if (state.mode === 'choice' && !MODE_OK.has(cmd)) {
+    const k = parseInt(t, 10);
+    if (/^[1-9]$/.test(t) && k <= state.choice.n) { if (state.choice.id === 'phish') answerPhish(k); else answerPw(k); return; }
+    P('Prima rispondi alla domanda: scrivi il numero (da 1 a ' + state.choice.n + ') e premi INVIO. Puoi anche usare hint.', 'warn');
+    return;
+  }
+  if (CMD[cmd]) { await CMD[cmd](args); return; }
+  if (FAKE.has(cmd)) { P(cmd + ': in questo terminale protetto i comandi sono pochi. Scrivi [[help]] per vedere quelli che servono.', 'warn'); return; }
+  const near = COMANDI.filter(c => lev(c, cmd) <= 2 && cmd.length > 1);
+  P('Comando non riconosciuto: "' + cmd + '". ' + (near.length ? 'Forse intendevi ' + near.map(c => '[[' + c + ']]').join(' o ') + '? ' : '') + 'Scrivi [[help]] per l\'elenco.', 'err');
+}
+async function submit(text){
+  if (busy || !state.started || state.done) return;
+  busy = true;
+  try {
+    echo(text, state.mode === 'login' && state.login.step === 1);
+    if (state.mode === 'login') handleLogin(text);
+    else await handleCommand(text);
+  } catch (e) { P('Errore interno: ' + e.message, 'err'); console.error(e); }
+  finally { busy = false; refreshUI(); inp.focus(); }
+}
+
+/* ---------- interfaccia ---------- */
+function tutStep(){ const f = state.flags; if (!f.ls) return 0; if (!f.mission) return 1; if (!f.guida) return 2; if (!f.vlanTxt) return 3; return 4; }
+function goalText(){
+  if (state.done) return 'Missione compiuta! Copia il report qui sotto nella Scheda 2.';
+  if (!state.visited[10]) return ['Scrivi [[ls]] e premi INVIO: mostra i file di questa cartella.', 'Leggi la missione: [[cat missione.txt]]', 'Entra nella cartella guida: [[cd guida]]', 'Leggi cosa sono le VLAN: [[cat vlan.txt]]', 'Ora vai nella prima VLAN: [[vlan 10]]'][tutStep()];
+  const f = frontier();
+  if (!f) return 'Apri la porta: [[uscita ' + [10, 20, 30, 40, 50].map(k => LEVEL[k].parola).join(' ') + ']]';
+  if (!state.visited[f]) return 'Prova superata! Passa alla prossima VLAN: [[vlan ' + f + ']]';
+  if (state.vlan !== f) return 'La prova da risolvere è nella VLAN ' + f + ': [[vlan ' + f + ']]';
+  const n = ORDER.indexOf(f), pre = 'Fragilità ' + n + '/5 · ' + LEVEL[f].tema + ' · ';
+  if (state.mode === 'choice') return pre + 'rispondi alla domanda: scrivi 1, 2 o 3.';
+  const g = {
+    '10:find': 'trova la mail trappola nella cartella posta e scrivi: segnala NOMEFILE',
+    '20:crack': 'entra in utenti ([[cd utenti]]) e scrivi: [[john hash.txt]]',
+    '30:login': 'scrivi [[telefono]] per il codice, poi [[login]] (utente, password, codice)',
+    '40:restore': 'trova l\'ultimo backup PULITO e scrivi: ripristina NOMEFILE',
+    '50:verify': 'confronta le impronte: sha256sum NOMEFILE su ogni file di download',
+    '50:install': 'installa il file giusto: installa NOMEFILE'
+  };
+  return pre + g[f + ':' + state.stage[f]];
+}
+function refreshUI(){
+  buildPrompt(psEl);
+  inp.type = (state.mode === 'login' && state.login.step === 1) ? 'password' : 'text';
+  const g = $('#goalTxt'); g.textContent = ''; render(g, goalText());
+  const s = $('#slots'); s.textContent = '';
+  const l = document.createElement('span'); l.className = 'lbl'; l.textContent = 'Codice d\'uscita'; s.appendChild(l);
+  [10, 20, 30, 40, 50].forEach(n => {
+    const e = document.createElement('span'); const on = !!state.solved[n];
+    e.className = 'slot' + (on ? ' on' : ''); e.textContent = on ? LEVEL[n].parola : '?'; s.appendChild(e);
+  });
+}
+function tick(){
+  if (!state.started || state.done) return;
+  const el = (Date.now() - state.startAt) / 1000, left = CFG.secondi - el;
+  const t = $('#timerTxt'), box = $('#timer');
+  if (left > 0) { t.textContent = 'LIVE tra ' + fmt(Math.ceil(left)); box.classList.remove('late'); }
+  else {
+    t.textContent = 'LIVE in corso +' + fmt(-left); box.classList.add('late');
+    if (!state.overtime) {
+      state.overtime = true;
+      P('⚠ La live è iniziata! Ma Ombra non ha ancora pubblicato nulla: hai ancora tempo.\nMODALITÀ AIUTO: ora hint ti dà subito il suggerimento più chiaro.', 'warn gap');
+    }
+  }
+}
+async function startGame(){
+  $('#start').hidden = true;
+  state.started = true; state.startAt = Date.now();
+  clearInterval(tickId); tickId = setInterval(tick, 250); tick();
+  refreshUI();
+  PM([['BLACKOUT IN REGIA', 'big'], ['Terminale della regia · VLAN 1 (10.1.0.0/24)', 'dim']]);
+  await sleep(300);
+  PM([['!!! PORTA BLOCCATA !!!  La live di Zeta inizia tra 15:00.', 'err'],
+      ['Sei collegato al terminale della regia. Qui puoi solo leggere e muoverti: ogni comando si scrive e poi si preme INVIO.', ''],
+      ['Per cominciare scrivi [[ls]] e premi INVIO. (Puoi anche cliccare sul testo colorato.)', 'info']]);
+  inp.focus();
+}
+function restart(){
+  clearInterval(tickId);
+  state = newState(); FS = buildFS(); busy = false;
+  out.textContent = ''; inp.value = '';
+  $('#timerTxt').textContent = 'LIVE tra ' + fmt(CFG.secondi); $('#timer').classList.remove('late');
+  refreshUI();
+  $('#start').hidden = false;
+}
+
+/* ---------- completamento con TAB ---------- */
+function complete(){
+  const v = inp.value, c = inp.selectionStart == null ? v.length : inp.selectionStart;
+  const head = v.slice(0, c), tok = (head.match(/\S*$/) || [''])[0], before = head.slice(0, head.length - tok.length);
+  let cands = [], pref = tok;
+  if (!before.trim()) cands = COMANDI.filter(x => x.startsWith(tok.toLowerCase()));
+  else {
+    const i = tok.lastIndexOf('/'), dirPart = tok.slice(0, i + 1); pref = tok.slice(i + 1);
+    const r = dirPart ? resolve(dirPart) : { node: cwdNode() };
+    if (r.node && isDir(r.node)) cands = Object.keys(r.node).filter(k => k.toLowerCase().startsWith(pref.toLowerCase())).map(k => dirPart + k + (isDir(r.node[k]) ? '/' : ''));
+    if (cands.length) pref = dirPart + pref;
+  }
+  if (!cands.length) return;
+  let common = cands[0];
+  for (const x of cands) { let i = 0; while (i < common.length && i < x.length && common[i].toLowerCase() === x[i].toLowerCase()) i++; common = common.slice(0, i); }
+  if (common.length > pref.length || cands.length === 1) {
+    const add = cands.length === 1 && !before.trim() ? common + ' ' : common;
+    inp.value = before + add + v.slice(c);
+    const pos = (before + add).length; inp.setSelectionRange(pos, pos);
+  } else if (cands.length > 1) {
+    P(cands.map(x => x.replace(/^.*\/(?=.)/, '')).join('   '), 'dim');
+  }
+}
+
+/* ---------- eventi ---------- */
+form.addEventListener('submit', e => { e.preventDefault(); const v = inp.value; inp.value = ''; submit(v); });
+inp.addEventListener('keydown', e => {
+  if (e.key === 'Tab') { e.preventDefault(); if (state.mode === 'normal') complete(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); if (state.hi > 0) { state.hi--; inp.value = state.hist[state.hi] || ''; } }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); if (state.hi < state.hist.length) { state.hi++; inp.value = state.hist[state.hi] || ''; } }
+  else if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); out.textContent = ''; }
+});
+function chipAct(el){ inp.value = el.dataset.ins; inp.focus(); const n = inp.value.length; inp.setSelectionRange(n, n); }
+document.addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (c && c.dataset.ins) { chipAct(c); return; }
+});
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('chip')) { e.preventDefault(); chipAct(e.target); }
+});
+term.addEventListener('mouseup', e => { if (!String(window.getSelection()).length && !e.target.closest('.chip,button')) inp.focus(); });
+document.querySelectorAll('.quick [data-run]').forEach(b => b.addEventListener('click', () => submit(b.dataset.run)));
+document.querySelectorAll('.quick [data-ins]').forEach(b => b.addEventListener('click', () => { inp.value = b.dataset.ins; inp.focus(); }));
+let fs = 15;
+const setFs = d => { fs = Math.min(24, Math.max(12, fs + d)); document.documentElement.style.setProperty('--fs', fs + 'px'); };
+$('#fsUp').addEventListener('click', () => setFs(1));
+$('#fsDown').addEventListener('click', () => setFs(-1));
+let armTimer = null;
+$('#restart').addEventListener('click', e => {
+  const b = e.currentTarget;
+  if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Sicuro? Clicca di nuovo'; armTimer = setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Ricomincia'; }, 3000); return; }
+  clearTimeout(armTimer); b.classList.remove('armed'); b.textContent = 'Ricomincia'; restart();
+});
+$('#go').addEventListener('click', startGame);
+window.addEventListener('beforeunload', e => { if (state.started && !state.done) { e.preventDefault(); e.returnValue = ''; } });
+
+state = newState(); FS = buildFS(); refreshUI();
+$('#timerTxt').textContent = 'LIVE tra ' + fmt(CFG.secondi);
+if (AUTORI) window.BLACKOUT = { get state(){ return state; }, get FS(){ return FS; }, submit, otpAt, otpNow, md5, sha256, startGame };
+</script>
+</body>
+</html>
